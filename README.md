@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Draftboard
 
-## Getting Started
+Local-first collaborative document editor built for the House of Edtech full-stack assignment.
 
-First, run the development server:
+## Features
+
+- Offline-first editing with IndexedDB as the primary client cache
+- Background sync queue with deterministic operation merging
+- Version snapshots with safe restore flow
+- Role-based access: owner, editor, viewer (viewers cannot push sync updates)
+- Strict Zod validation and payload size limits on sync APIs
+- Connection status indicators (online, offline, syncing, error)
+- Optional AI summarize/improve actions via OpenAI
+- PostgreSQL persistence with optional RLS policies
+
+## Stack
+
+- Next.js 16 App Router
+- TypeScript
+- React + Tailwind + shadcn/ui
+- Auth.js (JWT credentials)
+- Prisma + PostgreSQL
+- Vitest for sync engine unit tests
+
+## Getting started
+
+1. Copy environment variables:
+
+```bash
+cp .env.example .env
+```
+
+2. Start PostgreSQL and set `DATABASE_URL`.
+
+3. Install dependencies and migrate:
+
+```bash
+npm install --legacy-peer-deps
+npx prisma db push
+```
+
+4. Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `npm run dev` - local development
+- `npm run build` - production build
+- `npm run test` - sync and validation unit tests
+- `npm run lint` - ESLint
 
-## Learn More
+## Architecture notes
 
-To learn more about Next.js, take a look at the following resources:
+### Local-first flow
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Edits update React state immediately.
+2. Diff operations are written to IndexedDB and queued.
+3. Sync engine debounces pushes to `/api/docs/[docId]/sync`.
+4. Server stores ops, rebuilds canonical content, and returns merged state.
+5. Client clears acknowledged ops and refreshes local cache.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Conflict resolution
 
-## Deploy on Vercel
+Operations are ordered by vector clock, then `clientId`, then `seq`. Replaying sorted ops produces the same document for every peer.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Security
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Auth required for protected routes and APIs
+- Viewer role blocked from sync writes
+- Payload byte cap and per-op limits prevent abusive sync requests
+- Optional `prisma/rls.sql` for PostgreSQL tenant isolation
+
+## Deployment
+
+Deploy to Vercel and configure:
+
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `NEXTAUTH_URL`
+- `OPENAI_API_KEY` (optional)
+- `NEXT_PUBLIC_AUTHOR_NAME`
+- `NEXT_PUBLIC_GITHUB_URL`
+- `NEXT_PUBLIC_LINKEDIN_URL`
+
+CI runs on push via GitHub Actions (`.github/workflows/ci.yml`).
+
+## Submission footer
+
+Set the public profile env vars so the deployed footer shows your name, GitHub, and LinkedIn links.

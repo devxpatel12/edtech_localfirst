@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum MemberRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ownedDocuments Document[]       @relation("DocumentOwner")
+  memberships    DocumentMember[]
+  operations     DocumentOp[]
+  versions       DocumentVersion[] @relation("VersionAuthor")
+  accounts       Account[]
+  sessions       Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @default("") @db.Text
+  clock     Json     @default("{}")
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner      User              @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members    DocumentMember[]
+  operations DocumentOp[]
+  versions   DocumentVersion[]
+
+  @@index([ownerId])
+  @@index([updatedAt])
+}
+
+model DocumentMember {
+  id         String     @id @default(cuid())
+  documentId String
+  userId     String
+  role       MemberRole @default(VIEWER)
+  createdAt  DateTime   @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+}
+
+model DocumentOp {
+  id         String   @id
+  documentId String
+  userId     String
+  kind       String
+  position   Int
+  text       String?  @db.Text
+  length     Int?
+  clock      Json
+  clientId   String
+  seq        Int
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, clientId, seq])
+  @@index([documentId, createdAt])
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  label      String?
+  content    String   @db.Text
+  clock      Json
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User     @relation("VersionAuthor", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt])
+}
