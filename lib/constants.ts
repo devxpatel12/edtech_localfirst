@@ -1,9 +1,9 @@
 export const APP_NAME = "Draftboard";
 
 export const PROFILE = {
-  name: process.env.NEXT_PUBLIC_AUTHOR_NAME ?? "Your Name",
-  github: process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com/yourusername",
-  linkedin: process.env.NEXT_PUBLIC_LINKEDIN_URL ?? "https://linkedin.com/in/yourusername",
+  name: process.env.NEXT_PUBLIC_AUTHOR_NAME ?? "Surendra Patel",
+  github: process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com/devxpatel12",
+  linkedin: process.env.NEXT_PUBLIC_LINKEDIN_URL ?? "https://linkedin.com/in/surendrakumar143/",
 };
 
 export const SYNC_DEBOUNCE_MS = 400;
