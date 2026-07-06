@@ -79,7 +79,8 @@ Operations are ordered by vector clock, then `clientId`, then `seq`. Replaying s
 
 Deploy to Vercel and configure:
 
-- `DATABASE_URL`
+- `DATABASE_URL` — Supabase **transaction** pooler (`:6543?pgbouncer=true&connection_limit=1`)
+- `DIRECT_URL` — Supabase session pooler (`:5432`) for migrations only
 - `AUTH_SECRET`
 - `AUTH_SECRET`
 - `AUTH_URL` (your production URL on Vercel, e.g. `https://your-app.vercel.app`)
