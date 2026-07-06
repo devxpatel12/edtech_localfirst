@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { FileText, LogOut, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import type { DocumentRecord } from "@/types/documents";
 import { toast } from "sonner";
 
 export function DashboardShell({ initialDocuments }: { initialDocuments: DocumentRecord[] }) {
+  const router = useRouter();
   const [documents, setDocuments] = useState(initialDocuments);
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
@@ -49,6 +51,12 @@ export function DashboardShell({ initialDocuments }: { initialDocuments: Documen
     }
   }
 
+  async function handleSignOut() {
+    await signOut({ redirect: false });
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <header className="border-b">
@@ -57,7 +65,7 @@ export function DashboardShell({ initialDocuments }: { initialDocuments: Documen
             <FileText className="size-5" aria-hidden />
             <h1 className="text-lg font-semibold">Documents</h1>
           </div>
-          <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: "/login" })}>
+          <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
             <LogOut className="size-4" />
             Sign out
           </Button>

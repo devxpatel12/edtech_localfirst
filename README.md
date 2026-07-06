@@ -81,7 +81,8 @@ Deploy to Vercel and configure:
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
-- `NEXTAUTH_URL`
+- `AUTH_SECRET`
+- `AUTH_URL` (your production URL on Vercel, e.g. `https://your-app.vercel.app`)
 - `OPENAI_API_KEY` (optional)
 - `NEXT_PUBLIC_AUTHOR_NAME`
 - `NEXT_PUBLIC_GITHUB_URL`
