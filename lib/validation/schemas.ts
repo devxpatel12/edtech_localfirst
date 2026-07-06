@@ -8,10 +8,12 @@ import {
 
 const vectorClockSchema = z.record(z.string(), z.number().int().min(0).max(1_000_000));
 
+const idSchema = z.string().min(1).max(128);
+
 export const documentOpSchema = z.object({
   id: z.string().uuid(),
-  documentId: z.string().cuid(),
-  userId: z.string().cuid(),
+  documentId: idSchema,
+  userId: idSchema,
   kind: z.enum(["insert", "delete"]),
   position: z.number().int().min(0).max(MAX_DOCUMENT_LENGTH),
   text: z.string().max(MAX_OP_TEXT_LENGTH).optional(),
@@ -19,11 +21,11 @@ export const documentOpSchema = z.object({
   clock: vectorClockSchema,
   clientId: z.string().uuid(),
   seq: z.number().int().min(0).max(1_000_000),
-  createdAt: z.string().datetime(),
+  createdAt: z.string(),
 });
 
 export const syncPayloadSchema = z.object({
-  documentId: z.string().cuid(),
+  documentId: idSchema,
   clientId: z.string().uuid(),
   sinceSeq: z.number().int().min(0).max(1_000_000),
   clock: vectorClockSchema,

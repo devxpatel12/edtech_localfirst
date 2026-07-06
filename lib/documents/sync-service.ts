@@ -4,6 +4,13 @@ import { maxClock } from "@/lib/sync/clocks";
 import { rebuildContent, sortOps } from "@/lib/sync/operations";
 import type { Prisma } from "@prisma/client";
 
+type SyncResult = {
+  content: string;
+  clock: VectorClock;
+  operations: DocumentOp[];
+  serverSeq: number;
+};
+
 export async function pullRemoteOps(documentId: string, since: Date) {
   return db.documentOp.findMany({
     where: {
@@ -11,47 +18,50 @@ export async function pullRemoteOps(documentId: string, since: Date) {
       createdAt: { gt: since },
     },
     orderBy: [{ createdAt: "asc" }],
+    take: 200,
   });
+}
+
+async function loadDocumentState(documentId: string): Promise<SyncResult> {
+  const doc = await db.document.findUniqueOrThrow({ where: { id: documentId } });
+  return {
+    content: doc.content,
+    clock: doc.clock as VectorClock,
+    operations: [],
+    serverSeq: 0,
+  };
+}
+
+async function findExistingOpKeys(documentId: string, incoming: DocumentOp[]) {
+  if (incoming.length === 0) return new Set<string>();
+
+  const clientIds = [...new Set(incoming.map((op) => op.clientId))];
+  const rows = await db.documentOp.findMany({
+    where: { documentId, clientId: { in: clientIds } },
+    select: { clientId: true, seq: true },
+  });
+
+  return new Set(rows.map((row) => `${row.clientId}:${row.seq}`));
 }
 
 export async function applyIncomingOps(
   documentId: string,
   incoming: DocumentOp[],
   userId: string,
-) {
+): Promise<SyncResult> {
   if (incoming.length === 0) {
-    const doc = await db.document.findUniqueOrThrow({ where: { id: documentId } });
-    return {
-      content: doc.content,
-      clock: doc.clock as VectorClock,
-      operations: [] as DocumentOp[],
-    };
+    const state = await loadDocumentState(documentId);
+    const count = await db.documentOp.count({ where: { documentId } });
+    return { ...state, serverSeq: count };
   }
 
-  const existing = await db.documentOp.findMany({
-    where: {
-      documentId,
-      OR: incoming.map((op) => ({
-        clientId: op.clientId,
-        seq: op.seq,
-      })),
-    },
-    select: { clientId: true, seq: true },
-  });
-
-  const seen = new Set(existing.map((row) => `${row.clientId}:${row.seq}`));
+  const seen = await findExistingOpKeys(documentId, incoming);
   const fresh = incoming.filter((op) => !seen.has(`${op.clientId}:${op.seq}`));
 
   if (fresh.length === 0) {
-    const doc = await db.document.findUniqueOrThrow({ where: { id: documentId } });
-    const allOps = await db.documentOp.findMany({ where: { documentId } });
-    return {
-      content: doc.content,
-      clock: doc.clock as VectorClock,
-      operations: serializeOps(allOps).filter((op) =>
-        incoming.some((item) => item.clientId === op.clientId && item.seq === op.seq),
-      ),
-    };
+    const state = await loadDocumentState(documentId);
+    const count = await db.documentOp.count({ where: { documentId } });
+    return { ...state, serverSeq: count };
   }
 
   for (const op of fresh) {
@@ -60,37 +70,44 @@ export async function applyIncomingOps(
     }
   }
 
-  const result = await db.$transaction(async (tx) => {
-    await tx.documentOp.createMany({
-      data: fresh.map((op) => ({
-        id: op.id,
-        documentId: op.documentId,
-        userId: op.userId,
-        kind: op.kind,
-        position: op.position,
-        text: op.text ?? null,
-        length: op.length ?? null,
-        clock: op.clock as Prisma.InputJsonValue,
-        clientId: op.clientId,
-        seq: op.seq,
-        createdAt: new Date(op.createdAt),
-      })),
-      skipDuplicates: true,
-    });
-
-    const allOps = await tx.documentOp.findMany({ where: { documentId } });
-    const content = rebuildContent("", serializeOps(allOps));
-    const clock = maxClock(allOps.map((op) => op.clock as VectorClock));
-
-    await tx.document.update({
-      where: { id: documentId },
-      data: { content, clock: clock as Prisma.InputJsonValue },
-    });
-
-    return { content, clock, operations: fresh };
+  // Sequential writes — required for Supabase transaction pooler (no interactive transactions).
+  await db.documentOp.createMany({
+    data: fresh.map((op) => ({
+      id: op.id,
+      documentId: op.documentId,
+      userId: op.userId,
+      kind: op.kind,
+      position: op.position,
+      text: op.text ?? null,
+      length: op.length ?? null,
+      clock: op.clock as Prisma.InputJsonValue,
+      clientId: op.clientId,
+      seq: op.seq,
+      createdAt: new Date(op.createdAt),
+    })),
+    skipDuplicates: true,
   });
 
-  return result;
+  const allOps = await db.documentOp.findMany({
+    where: { documentId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const serialized = serializeOps(allOps);
+  const content = rebuildContent("", serialized);
+  const clock = maxClock(allOps.map((op) => op.clock as VectorClock));
+
+  await db.document.update({
+    where: { id: documentId },
+    data: { content, clock: clock as Prisma.InputJsonValue },
+  });
+
+  return {
+    content,
+    clock,
+    operations: serialized,
+    serverSeq: allOps.length,
+  };
 }
 
 export function serializeOps(

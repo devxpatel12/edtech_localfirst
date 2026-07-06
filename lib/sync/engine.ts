@@ -1,5 +1,5 @@
 import type { ConnectionState, DocumentOp, SyncResponse } from "@/types/documents";
-import { SYNC_DEBOUNCE_MS } from "@/lib/constants";
+import { SYNC_DEBOUNCE_MS, SYNC_POLL_MS } from "@/lib/constants";
 import { incrementClock, mergeClocks } from "@/lib/sync/clocks";
 import { diffToOps, rebuildContent } from "@/lib/sync/operations";
 import {
@@ -29,6 +29,7 @@ export class SyncEngine {
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastPulledAt = new Date(0).toISOString();
+  private syncing = false;
 
   constructor(documentId: string, userId: string, role: LocalDocument["role"]) {
     this.documentId = documentId;
@@ -51,7 +52,7 @@ export class SyncEngine {
 
     this.pollTimer = setInterval(() => {
       void this.sync();
-    }, 5_000);
+    }, SYNC_POLL_MS);
 
     await this.sync();
   }
@@ -154,9 +155,12 @@ export class SyncEngine {
   }
 
   async sync() {
-    if (!navigator.onLine || this.role === "VIEWER") return;
+    if (!navigator.onLine || this.role === "VIEWER" || this.syncing) return;
 
     const pending = await getPendingOps(this.documentId);
+    if (pending.length === 0) return;
+
+    this.syncing = true;
     this.setConnection("syncing");
 
     try {
@@ -181,6 +185,8 @@ export class SyncEngine {
       this.setConnection("online");
     } catch {
       this.setConnection(navigator.onLine ? "error" : "offline");
+    } finally {
+      this.syncing = false;
     }
   }
 

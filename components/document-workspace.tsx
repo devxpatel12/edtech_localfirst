@@ -16,7 +16,7 @@ import { AiPanel } from "@/components/ai-panel";
 import { SyncEngine } from "@/lib/sync/engine";
 import { saveLocalDocument, getLocalDocument } from "@/lib/sync/storage";
 import type { ConnectionState, DocumentRecord } from "@/types/documents";
-import { SNAPSHOT_INTERVAL_MS } from "@/lib/constants";
+import { SNAPSHOT_INTERVAL_MS, SYNC_POLL_MS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -81,7 +81,7 @@ export function DocumentWorkspace({ document, userId }: Props) {
 
     const pullTimer = setInterval(() => {
       void engine.pullOnly();
-    }, 4_000);
+    }, SYNC_POLL_MS);
 
     return () => {
       unsubscribe();
