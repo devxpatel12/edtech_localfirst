@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ConnectionBadge } from "@/components/connection-badge";
+import { HeaderUser } from "@/components/header-user";
 import { SiteFooter } from "@/components/site-footer";
 import { VersionPanel } from "@/components/version-panel";
 import { SharePanel } from "@/components/share-panel";
@@ -136,6 +137,7 @@ export function DocumentWorkspace({ document, userId }: Props) {
             <Badge variant="secondary">{document.role.toLowerCase()}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <HeaderUser />
             <ConnectionBadge state={connection} />
             <Button variant="outline" size="sm" onClick={() => setShowHistory(true)}>
               <History className="size-4" />
