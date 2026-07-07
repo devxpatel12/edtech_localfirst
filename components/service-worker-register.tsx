@@ -8,9 +8,7 @@ export function ServiceWorkerRegister() {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
     const register = () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Registration failures are non-fatal; the app still works online.
-      });
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     };
 
     if (document.readyState === "complete") {

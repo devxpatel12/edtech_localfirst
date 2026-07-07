@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { updateSession } from "@/utils/supabase/middleware";
 
 const protectedPrefixes = ["/dashboard", "/docs"];
 
 export async function middleware(request: NextRequest) {
-  const supabaseResponse = await updateSession(request);
   const { pathname } = request.nextUrl;
   const needsAuth = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   if (!needsAuth) {
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   const session = await auth();
@@ -21,7 +19,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {

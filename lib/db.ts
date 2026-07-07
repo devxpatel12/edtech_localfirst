@@ -28,12 +28,6 @@ function isTransientDbError(error: unknown): boolean {
   );
 }
 
-/**
- * Retries a database operation on transient pooler/connection errors.
- * Serverless + Supabase PgBouncer can drop or time out connections on cold
- * starts; a couple of short retries turns those blips into successful requests
- * instead of user-facing 500s.
- */
 export async function withDbRetry<T>(operation: () => Promise<T>, retries = 2): Promise<T> {
   let lastError: unknown;
 

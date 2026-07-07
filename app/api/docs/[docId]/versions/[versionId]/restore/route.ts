@@ -27,8 +27,6 @@ export async function POST(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Version not found" }, { status: 404 });
     }
 
-    // Sequential writes — the Supabase transaction pooler does not support
-    // Prisma interactive transactions. Clear ops, reset content, then snapshot.
     await db.documentOp.deleteMany({ where: { documentId: docId } });
 
     const restored = await db.document.update({

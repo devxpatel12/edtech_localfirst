@@ -23,12 +23,16 @@ export async function pullRemoteOps(documentId: string, since: Date) {
 }
 
 async function loadDocumentState(documentId: string): Promise<SyncResult> {
-  const doc = await db.document.findUniqueOrThrow({ where: { id: documentId } });
+  const [doc, serverSeq] = await Promise.all([
+    db.document.findUniqueOrThrow({ where: { id: documentId } }),
+    db.documentOp.count({ where: { documentId } }),
+  ]);
+
   return {
     content: doc.content,
     clock: doc.clock as VectorClock,
     operations: [],
-    serverSeq: 0,
+    serverSeq,
   };
 }
 
@@ -50,18 +54,14 @@ export async function applyIncomingOps(
   userId: string,
 ): Promise<SyncResult> {
   if (incoming.length === 0) {
-    const state = await loadDocumentState(documentId);
-    const count = await db.documentOp.count({ where: { documentId } });
-    return { ...state, serverSeq: count };
+    return loadDocumentState(documentId);
   }
 
   const seen = await findExistingOpKeys(documentId, incoming);
   const fresh = incoming.filter((op) => !seen.has(`${op.clientId}:${op.seq}`));
 
   if (fresh.length === 0) {
-    const state = await loadDocumentState(documentId);
-    const count = await db.documentOp.count({ where: { documentId } });
-    return { ...state, serverSeq: count };
+    return loadDocumentState(documentId);
   }
 
   for (const op of fresh) {
@@ -70,7 +70,6 @@ export async function applyIncomingOps(
     }
   }
 
-  // Sequential writes — required for Supabase transaction pooler (no interactive transactions).
   await db.documentOp.createMany({
     data: fresh.map((op) => ({
       id: op.id,

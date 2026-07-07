@@ -1,7 +1,3 @@
-/**
- * Auth.js uses AUTH_URL for post-sign-out redirects. If it stays as localhost
- * in a deployed environment, users get sent to localhost after sign out.
- */
 export function ensureAuthUrl() {
   const configured = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
   const looksLocal =

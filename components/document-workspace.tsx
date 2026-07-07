@@ -70,7 +70,6 @@ export function DocumentWorkspace({ document, userId }: Props) {
       dirty: false,
     });
 
-    // Snapshot only while online and only for editors (viewers cannot write).
     const snapshotTimer = setInterval(() => {
       if (navigator.onLine && document.role !== "VIEWER") {
         void fetch(`/api/docs/${document.id}/versions`, { method: "POST" });

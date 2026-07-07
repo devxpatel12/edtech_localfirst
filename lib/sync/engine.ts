@@ -1,4 +1,4 @@
-import type { ConnectionState, DocumentOp, SyncResponse } from "@/types/documents";
+import type { ConnectionState, SyncResponse } from "@/types/documents";
 import { SYNC_DEBOUNCE_MS, SYNC_POLL_MS } from "@/lib/constants";
 import { incrementClock, mergeClocks } from "@/lib/sync/clocks";
 import { diffToOps, rebuildContent } from "@/lib/sync/operations";
@@ -37,11 +37,6 @@ export class SyncEngine {
     this.role = role;
   }
 
-  /**
-   * Boots the engine from a server snapshot while preserving any unsynced local
-   * work. On an offline cold-reload the server snapshot is stale (cached HTML),
-   * so we must never blindly overwrite newer/dirty content held in IndexedDB.
-   */
   async start(server: LocalDocument) {
     this.clientId = await getClientId();
 
@@ -58,7 +53,6 @@ export class SyncEngine {
     const seed = localIsAuthoritative && local ? local : server;
     this.content = seed.content;
     this.clock = seed.clock ?? {};
-    // Role is always authoritative from the server snapshot.
     this.role = server.role;
 
     await saveLocalDocument({
@@ -83,7 +77,6 @@ export class SyncEngine {
     await this.refresh();
   }
 
-  /** Push pending local ops, then pull remote changes. Safe to call anytime. */
   async refresh() {
     await this.sync();
     await this.pullOnly();
@@ -229,7 +222,6 @@ export class SyncEngine {
 
     const pending = await getPendingOps(this.documentId);
 
-    // Trust canonical server content; only replay pending local ops on top when needed.
     if (pending.length === 0) {
       this.content = payload.content;
     } else {
@@ -257,7 +249,6 @@ export class SyncEngine {
     if (!navigator.onLine) return;
 
     const pending = await getPendingOps(this.documentId);
-    // Editors with unsent local ops must not be overwritten by incremental pulls.
     if (pending.length > 0 && this.role !== "VIEWER") return;
 
     try {
@@ -268,7 +259,6 @@ export class SyncEngine {
 
       const payload = (await response.json()) as SyncResponse;
 
-      // GET returns incremental ops only — never rebuild from an empty base.
       this.content = payload.content;
       this.clock = mergeClocks(this.clock, payload.clock);
       this.lastPulledAt = new Date().toISOString();
@@ -286,7 +276,7 @@ export class SyncEngine {
 
       this.notifyContentChange();
     } catch {
-      // viewers still read local cache
+      this.setConnection(navigator.onLine ? "error" : "offline");
     }
   }
 }

@@ -1,8 +1,3 @@
-/* Draftboard offline service worker.
- * - Static assets: cache-first
- * - Navigations: network-first with cached fallback, then the offline page
- * - API requests: never cached (handled client-side via IndexedDB)
- */
 const CACHE = "draftboard-v1";
 const OFFLINE_URL = "/offline";
 
