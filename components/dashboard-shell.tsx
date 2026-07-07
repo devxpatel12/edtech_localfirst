@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { FileText, Plus } from "lucide-react";
+import { useCallback, useState } from "react";
+import { FileText, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { SiteFooter } from "@/components/site-footer";
 import { HeaderUser } from "@/components/header-user";
+import { DocumentCard } from "@/components/document-card";
 import type { DocumentRecord } from "@/types/documents";
 import { toast } from "sonner";
 
@@ -17,25 +16,16 @@ export function DashboardShell({ initialDocuments }: { initialDocuments: Documen
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    void refreshDocuments();
-  }, []);
+  const createDocument = useCallback(async () => {
+    const trimmed = title.trim();
+    if (!trimmed || creating) return;
 
-  async function refreshDocuments() {
-    const response = await fetch("/api/docs");
-    if (!response.ok) return;
-    const payload = (await response.json()) as { documents: DocumentRecord[] };
-    setDocuments(payload.documents);
-  }
-
-  async function createDocument() {
-    if (!title.trim()) return;
     setCreating(true);
     try {
       const response = await fetch("/api/docs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim() }),
+        body: JSON.stringify({ title: trimmed }),
       });
       if (!response.ok) throw new Error("Could not create document");
       const payload = (await response.json()) as { document: DocumentRecord };
@@ -47,11 +37,16 @@ export function DashboardShell({ initialDocuments }: { initialDocuments: Documen
     } finally {
       setCreating(false);
     }
-  }
+  }, [title, creating]);
+
+  const handleDeleted = useCallback((id: string) => {
+    setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+    toast.success("Document deleted");
+  }, []);
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="border-b">
+      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
             <FileText className="size-5" aria-hidden />
@@ -72,12 +67,17 @@ export function DashboardShell({ initialDocuments }: { initialDocuments: Documen
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Quarterly planning notes"
               aria-label="Document title"
+              disabled={creating}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void createDocument();
               }}
             />
             <Button onClick={() => void createDocument()} disabled={creating || !title.trim()}>
-              <Plus className="size-4" />
+              {creating ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
               Create
             </Button>
           </CardContent>
@@ -85,24 +85,18 @@ export function DashboardShell({ initialDocuments }: { initialDocuments: Documen
 
         <section aria-label="Document list" className="grid gap-3">
           {documents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No documents yet. Create one to get started.</p>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
+              <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <FileText className="size-5" aria-hidden />
+              </span>
+              <p className="font-medium">No documents yet</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Create your first document above to start writing offline and syncing automatically.
+              </p>
+            </div>
           ) : (
             documents.map((doc) => (
-              <Link
-                key={doc.id}
-                href={`/docs/${doc.id}`}
-                className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent/40"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{doc.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Updated {new Date(doc.updatedAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge variant="secondary">{doc.role.toLowerCase()}</Badge>
-                </div>
-              </Link>
+              <DocumentCard key={doc.id} document={doc} onDeleted={handleDeleted} />
             ))
           )}
         </section>

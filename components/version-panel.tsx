@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { DocumentVersion } from "@/types/documents";
 import { toast } from "sonner";
 
@@ -68,7 +69,16 @@ export function VersionPanel({ open, onOpenChange, documentId, canRestore, onRes
         </SheetHeader>
         <ScrollArea className="mt-4 h-[70vh] pr-3">
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading versions...</p>
+            <ul className="space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <li key={index} className="space-y-2 rounded-md border p-3">
+                  <Skeleton className="h-4 w-2/5" />
+                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-4/5" />
+                </li>
+              ))}
+            </ul>
           ) : versions.length === 0 ? (
             <p className="text-sm text-muted-foreground">No snapshots yet.</p>
           ) : (

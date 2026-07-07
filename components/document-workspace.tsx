@@ -2,11 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, History, Sparkles, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, History, Loader2, Sparkles, Trash2, Users } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { HeaderUser } from "@/components/header-user";
 import { SiteFooter } from "@/components/site-footer";
@@ -18,7 +29,6 @@ import { saveLocalDocument, getLocalDocument } from "@/lib/sync/storage";
 import type { ConnectionState, DocumentRecord } from "@/types/documents";
 import { SNAPSHOT_INTERVAL_MS, SYNC_POLL_MS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
 import { toast } from "sonner";
 
 type Props = {
@@ -27,14 +37,18 @@ type Props = {
 };
 
 export function DocumentWorkspace({ document, userId }: Props) {
+  const router = useRouter();
   const [title, setTitle] = useState(document.title);
   const [content, setContent] = useState(document.content);
   const [connection, setConnection] = useState<ConnectionState>("online");
   const [showHistory, setShowHistory] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showAi, setShowAi] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const engineRef = useRef<SyncEngine | null>(null);
   const readOnly = document.role === "VIEWER";
+  const isOwner = document.role === "OWNER";
 
   const engine = useMemo(
     () => new SyncEngine(document.id, userId, document.role),
@@ -114,6 +128,21 @@ export function DocumentWorkspace({ document, userId }: Props) {
     toast.success("Title updated");
   }
 
+  async function deleteDocument() {
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/docs/${document.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("delete failed");
+      toast.success("Document deleted");
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      toast.error("Could not delete document");
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <header className="border-b">
@@ -143,7 +172,7 @@ export function DocumentWorkspace({ document, userId }: Props) {
               <History className="size-4" />
               History
             </Button>
-            {document.role === "OWNER" ? (
+            {isOwner ? (
               <Button variant="outline" size="sm" onClick={() => setShowShare(true)}>
                 <Users className="size-4" />
                 Share
@@ -153,6 +182,17 @@ export function DocumentWorkspace({ document, userId }: Props) {
               <Button variant="outline" size="sm" onClick={() => setShowAi(true)}>
                 <Sparkles className="size-4" />
                 AI
+              </Button>
+            ) : null}
+            {isOwner ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete
               </Button>
             ) : null}
           </div>
@@ -195,6 +235,32 @@ export function DocumentWorkspace({ document, userId }: Props) {
         selection={content}
         onApply={(value) => handleContentChange(value)}
       />
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{document.title}&rdquo; and its version history will be permanently removed for
+              all collaborators. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteDocument();
+              }}
+            >
+              {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
