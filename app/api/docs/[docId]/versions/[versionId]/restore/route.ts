@@ -18,18 +18,20 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const version = await db.documentVersion.findFirst({
-    where: { id: versionId, documentId: docId },
-  });
+  try {
+    const version = await db.documentVersion.findFirst({
+      where: { id: versionId, documentId: docId },
+    });
 
-  if (!version) {
-    return NextResponse.json({ error: "Version not found" }, { status: 404 });
-  }
+    if (!version) {
+      return NextResponse.json({ error: "Version not found" }, { status: 404 });
+    }
 
-  const restored = await db.$transaction(async (tx) => {
-    await tx.documentOp.deleteMany({ where: { documentId: docId } });
+    // Sequential writes — the Supabase transaction pooler does not support
+    // Prisma interactive transactions. Clear ops, reset content, then snapshot.
+    await db.documentOp.deleteMany({ where: { documentId: docId } });
 
-    const document = await tx.document.update({
+    const restored = await db.document.update({
       where: { id: docId },
       data: {
         content: version.content,
@@ -37,7 +39,7 @@ export async function POST(_request: Request, context: RouteContext) {
       },
     });
 
-    await tx.documentVersion.create({
+    await db.documentVersion.create({
       data: {
         documentId: docId,
         label: `Restored from ${version.label ?? version.id}`,
@@ -47,17 +49,21 @@ export async function POST(_request: Request, context: RouteContext) {
       },
     });
 
-    return document;
-  });
-
-  return NextResponse.json({
-    document: {
-      id: restored.id,
-      title: restored.title,
-      content: restored.content,
-      clock: restored.clock as Record<string, number>,
-      role: access.role,
-      updatedAt: restored.updatedAt.toISOString(),
-    },
-  });
+    return NextResponse.json({
+      document: {
+        id: restored.id,
+        title: restored.title,
+        content: restored.content,
+        clock: restored.clock as Record<string, number>,
+        role: access.role,
+        updatedAt: restored.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("[restore]", error);
+    return NextResponse.json(
+      { error: "Could not restore version. Please try again." },
+      { status: 503 },
+    );
+  }
 }

@@ -1,16 +1,18 @@
 import type { MemberRole } from "@/types/documents";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 
 export async function getDocumentAccess(documentId: string, userId: string) {
-  const document = await db.document.findUnique({
-    where: { id: documentId },
-    include: {
-      members: {
-        where: { userId },
-        select: { role: true },
+  const document = await withDbRetry(() =>
+    db.document.findUnique({
+      where: { id: documentId },
+      include: {
+        members: {
+          where: { userId },
+          select: { role: true },
+        },
       },
-    },
-  });
+    }),
+  );
 
   if (!document) return null;
 
@@ -25,33 +27,37 @@ export async function getDocumentAccess(documentId: string, userId: string) {
 }
 
 export async function listAccessibleDocuments(userId: string) {
-  const owned = await db.document.findMany({
-    where: { ownerId: userId },
-    orderBy: { updatedAt: "desc" },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      clock: true,
-      updatedAt: true,
-    },
-  });
+  const owned = await withDbRetry(() =>
+    db.document.findMany({
+      where: { ownerId: userId },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        clock: true,
+        updatedAt: true,
+      },
+    }),
+  );
 
-  const shared = await db.documentMember.findMany({
-    where: { userId },
-    include: {
-      document: {
-        select: {
-          id: true,
-          title: true,
-          content: true,
-          clock: true,
-          updatedAt: true,
+  const shared = await withDbRetry(() =>
+    db.documentMember.findMany({
+      where: { userId },
+      include: {
+        document: {
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            clock: true,
+            updatedAt: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+  );
 
   const ownedRows = owned.map((doc) => ({
     ...doc,
