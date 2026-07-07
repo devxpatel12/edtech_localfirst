@@ -37,24 +37,56 @@ export class SyncEngine {
     this.role = role;
   }
 
-  async bootstrap(local: LocalDocument) {
+  /**
+   * Boots the engine from a server snapshot while preserving any unsynced local
+   * work. On an offline cold-reload the server snapshot is stale (cached HTML),
+   * so we must never blindly overwrite newer/dirty content held in IndexedDB.
+   */
+  async start(server: LocalDocument) {
     this.clientId = await getClientId();
-    this.content = local.content;
-    this.clock = local.clock;
-    this.role = local.role;
 
+    const local = await getLocalDocument(this.documentId);
     const pending = await getPendingOps(this.documentId);
     this.seq = pending.reduce((max, op) => Math.max(max, op.seq), 0);
+
+    const localIsAuthoritative =
+      !!local &&
+      (local.dirty ||
+        pending.length > 0 ||
+        new Date(local.updatedAt).getTime() >= new Date(server.updatedAt).getTime());
+
+    const seed = localIsAuthoritative && local ? local : server;
+    this.content = seed.content;
+    this.clock = seed.clock ?? {};
+    // Role is always authoritative from the server snapshot.
+    this.role = server.role;
+
+    await saveLocalDocument({
+      id: this.documentId,
+      title: server.title || seed.title || "Untitled",
+      content: this.content,
+      clock: this.clock,
+      role: this.role,
+      updatedAt: seed.updatedAt,
+      dirty: pending.length > 0,
+    });
 
     window.addEventListener("online", this.handleOnline);
     window.addEventListener("offline", this.handleOffline);
     this.setConnection(navigator.onLine ? "online" : "offline");
+    this.notifyContentChange();
 
     this.pollTimer = setInterval(() => {
-      void this.sync();
+      void this.refresh();
     }, SYNC_POLL_MS);
 
+    await this.refresh();
+  }
+
+  /** Push pending local ops, then pull remote changes. Safe to call anytime. */
+  async refresh() {
     await this.sync();
+    await this.pullOnly();
   }
 
   dispose() {
@@ -142,7 +174,7 @@ export class SyncEngine {
 
   private handleOnline = () => {
     this.setConnection("online");
-    void this.sync();
+    void this.refresh();
   };
 
   private handleOffline = () => {

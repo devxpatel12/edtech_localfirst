@@ -5,11 +5,13 @@ Local-first collaborative document editor built for the House of Edtech full-sta
 ## Features
 
 - Offline-first editing with IndexedDB as the primary client cache
-- Background sync queue with deterministic operation merging
+- Installable PWA + service worker: the app shell and visited documents load with no network
+- Offline-safe bootstrap that never overwrites unsynced local edits on reload
+- Background sync queue with deterministic operation merging, auto-reconciled on reconnect
 - Version snapshots with safe restore flow
 - Role-based access: owner, editor, viewer (viewers cannot push sync updates)
 - Strict Zod validation and payload size limits on sync APIs
-- Connection status indicators (online, offline, syncing, error)
+- Connection status indicators (online, offline, syncing, error) with a manual "Retry sync"
 - Optional AI summarize/improve actions via OpenAI
 - PostgreSQL persistence with optional RLS policies
 

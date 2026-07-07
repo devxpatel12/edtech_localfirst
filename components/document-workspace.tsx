@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, History, Loader2, Sparkles, Trash2, Users } from "lucide-react";
+import { ArrowLeft, History, Loader2, RefreshCw, Sparkles, Trash2, Users } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,8 @@ import { VersionPanel } from "@/components/version-panel";
 import { SharePanel } from "@/components/share-panel";
 import { AiPanel } from "@/components/ai-panel";
 import { SyncEngine } from "@/lib/sync/engine";
-import { saveLocalDocument, getLocalDocument } from "@/lib/sync/storage";
 import type { ConnectionState, DocumentRecord } from "@/types/documents";
-import { SNAPSHOT_INTERVAL_MS, SYNC_POLL_MS } from "@/lib/constants";
+import { SNAPSHOT_INTERVAL_MS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -58,51 +57,31 @@ export function DocumentWorkspace({ document, userId }: Props) {
   useEffect(() => {
     engineRef.current = engine;
 
-    async function init() {
-      await saveLocalDocument({
-        id: document.id,
-        title: document.title,
-        content: document.content,
-        clock: document.clock,
-        role: document.role,
-        updatedAt: document.updatedAt,
-        dirty: false,
-      });
-
-      await engine.bootstrap({
-        id: document.id,
-        title: document.title,
-        content: document.content,
-        clock: document.clock,
-        role: document.role,
-        updatedAt: document.updatedAt,
-        dirty: false,
-      });
-
-      await engine.pullOnly();
-
-      const local = await getLocalDocument(document.id);
-      if (local) setContent(local.content);
-    }
-
     const unsubscribe = engine.onConnectionChange(setConnection);
     const unsubscribeContent = engine.onContentChange(setContent);
-    void init();
 
+    void engine.start({
+      id: document.id,
+      title: document.title,
+      content: document.content,
+      clock: document.clock,
+      role: document.role,
+      updatedAt: document.updatedAt,
+      dirty: false,
+    });
+
+    // Snapshot only while online and only for editors (viewers cannot write).
     const snapshotTimer = setInterval(() => {
-      void fetch(`/api/docs/${document.id}/versions`, { method: "POST" });
+      if (navigator.onLine && document.role !== "VIEWER") {
+        void fetch(`/api/docs/${document.id}/versions`, { method: "POST" });
+      }
     }, SNAPSHOT_INTERVAL_MS);
-
-    const pullTimer = setInterval(() => {
-      void engine.pullOnly();
-    }, SYNC_POLL_MS);
 
     return () => {
       unsubscribe();
       unsubscribeContent();
       engine.dispose();
       clearInterval(snapshotTimer);
-      clearInterval(pullTimer);
     };
   }, [document, engine]);
 
@@ -200,6 +179,27 @@ export function DocumentWorkspace({ document, userId }: Props) {
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+        {connection === "offline" || connection === "error" ? (
+          <div
+            role="status"
+            className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between dark:text-amber-300"
+          >
+            <span>
+              {connection === "offline"
+                ? "You're offline. Edits are saved on this device and will sync automatically when you reconnect."
+                : "Couldn't reach the server. Your edits are safe locally."}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void engineRef.current?.refresh()}
+            >
+              <RefreshCw className="size-4" />
+              Retry sync
+            </Button>
+          </div>
+        ) : null}
+
         <Textarea
           value={content}
           onChange={(event) => handleContentChange(event.target.value)}
