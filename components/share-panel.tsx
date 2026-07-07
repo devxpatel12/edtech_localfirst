@@ -8,6 +8,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,6 +68,46 @@ export function SharePanel({ open, onOpenChange, documentId }: Props) {
     void loadMembers();
   }
 
+  async function changeRole(memberId: string, nextRole: "EDITOR" | "VIEWER") {
+    const previous = members;
+    setMembers((current) =>
+      current.map((member) =>
+        member.id === memberId ? { ...member, role: nextRole } : member,
+      ),
+    );
+
+    const response = await fetch(`/api/docs/${documentId}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: nextRole }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      toast.error(payload.error ?? "Could not update role");
+      setMembers(previous);
+      return;
+    }
+    toast.success("Role updated");
+  }
+
+  async function removeMember(memberId: string) {
+    const previous = members;
+    setMembers((current) => current.filter((member) => member.id !== memberId));
+
+    const response = await fetch(`/api/docs/${documentId}/members/${memberId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      toast.error(payload.error ?? "Could not remove member");
+      setMembers(previous);
+      return;
+    }
+    toast.success("Member removed");
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md">
@@ -99,12 +140,43 @@ export function SharePanel({ open, onOpenChange, documentId }: Props) {
 
         <ul className="mt-6 space-y-2">
           {members.map((member) => (
-            <li key={member.id} className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div>
-                <p className="text-sm font-medium">{member.name}</p>
-                <p className="text-xs text-muted-foreground">{member.email}</p>
+            <li
+              key={member.id}
+              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{member.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{member.email}</p>
               </div>
-              <Badge variant="secondary">{member.role.toLowerCase()}</Badge>
+
+              {member.role === "OWNER" ? (
+                <Badge variant="secondary">owner</Badge>
+              ) : (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Select
+                    value={member.role}
+                    onValueChange={(value) =>
+                      void changeRole(member.id, value as "EDITOR" | "VIEWER")
+                    }
+                  >
+                    <SelectTrigger size="sm" aria-label={`Role for ${member.email}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EDITOR">Editor</SelectItem>
+                      <SelectItem value="VIEWER">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove ${member.email}`}
+                    onClick={() => void removeMember(member.id)}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

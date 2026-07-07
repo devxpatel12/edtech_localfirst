@@ -49,6 +49,10 @@ export const inviteMemberSchema = z.object({
   role: z.enum(["EDITOR", "VIEWER"]),
 });
 
+export const updateMemberSchema = z.object({
+  role: z.enum(["EDITOR", "VIEWER"]),
+});
+
 export const registerSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().email(),
